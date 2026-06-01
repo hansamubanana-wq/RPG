@@ -26,7 +26,7 @@
             box-shadow: 0 0 15px rgba(255,255,255,0.1);
         }
 
-        h1, h2 {
+        h1, h2, h3 {
             text-align: center;
             color: #ffd700;
             margin-top: 0;
@@ -40,7 +40,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin: 10px 0;
+            margin: 8px 0;
             padding: 5px;
             border-bottom: 1px dashed #333;
         }
@@ -117,11 +117,11 @@
             display: flex;
             gap: 10px;
             margin-bottom: 15px;
+            justify-content: center;
         }
 
         .pixel-art { font-size: 40px; margin-bottom: 10px; }
         
-        /* プレイヤー情報ヘッダー */
         .player-header {
             display: flex;
             justify-content: space-between;
@@ -131,6 +131,13 @@
             margin-bottom: 15px;
             font-size: 14px;
         }
+
+        .stage-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -139,7 +146,7 @@
     <h1>TWILIGHT THRONE</h1>
     
     <div class="player-header">
-        <div>名誉: <span id="header-wep">大剣</span>使い</div>
+        <div>称号: <span id="header-title">新米の旅人</span></div>
         <div>Lv: <span id="header-lv">1</span></div>
         <div>Exp: <span id="header-exp">0</span> / <span id="header-next">20</span></div>
     </div>
@@ -147,18 +154,30 @@
     <div id="build-screen" class="screen active">
         <h2>拠点：ステータス割り振り (残りP: <span id="points">5</span>)</h2>
         <div class="weapon-select">
-            <button onclick="selectWeapon('大剣')">⚔️大剣 (筋力型)</button>
-            <button onclick="selectWeapon('名刀')">🗡️名刀 (技量型)</button>
-            <button onclick="selectWeapon('聖杖')">🪄聖杖 (信仰型)</button>
+            <button onclick="selectWeapon('大剣')">⚔️大剣</button>
+            <button onclick="selectWeapon('名刀')">🗡️名刀</button>
+            <button onclick="selectWeapon('聖杖')">🪄聖杖</button>
         </div>
-        <p style="text-align: center; color: #aaa;">現在選択中: <strong id="selected-wep" style="color:#fff;">大剣</strong></p>
+        <p style="text-align: center; color: #aaa; margin: 5px 0;">現在: <strong id="selected-wep" style="color:#fff;">大剣</strong></p>
         
         <div id="status-builders"></div>
         
-        <h3 style="text-align:center; color:#ffd700; margin-top:20px;">── 遠征先を選択 ──</h3>
-        <div style="display: flex; justify-content: space-around; margin-top: 10px;">
+        <div style="text-align: center; margin: 10px 0;">
+            <button onclick="savePlayerData()" style="background-color: #1e90ff; font-size: 12px;">💾 クラウドにセーブ (Firebase)</button>
+            <span id="save-msg" style="color: #2ed573; font-size: 12px; margin-left: 10px;"></span>
+        </div>
+
+        <h3 style="color:#ffd700; margin-top:15px; font-size:18px;">── 遠征先を選択 ──</h3>
+        <div class="stage-list">
             <button id="btn-stage0" onclick="startBattle(0)">第1章：忌み子マルギト (推奨Lv1)</button>
             <button id="btn-stage1" onclick="startBattle(1)" disabled>第2章：満月の女王レナラ (推奨Lv3)</button>
+            <button id="btn-stage2" onclick="startBattle(2)" style="border-color: #ff4757; color: #ff4757;" disabled>最終章：黄金の君主・ゴドリック (推奨Lv5)</button>
+        </div>
+
+        <h3 style="color:#1e90ff; margin-top:20px; font-size:18px;">── オンライン対人戦 ──</h3>
+        <div style="text-align: center;">
+            <button id="btn-pvp" onclick="startPvPPre()" style="width: 100%; border-color: #1e90ff; color: #1e90ff; font-size: 18px;" disabled>⚔️ ランクマッチに参戦（準備中）</button>
+            <p style="font-size: 11px; color: #888; margin-top: 5px;">※対人戦の解放には、ラスボス「ゴドリック」の撃破が必要です。</p>
         </div>
     </div>
 
@@ -168,14 +187,14 @@
         <div class="battle-view">
             <div class="char-box">
                 <div class="pixel-art">🧙‍♂️</div>
-                <div>プレイヤー</div>
+                <div id="p-name-display">あなた</div>
                 <div class="hp-bar-container"><div id="p-hp" class="hp-bar"></div></div>
                 <div class="hp-bar-container" style="margin-top:2px;"><div id="p-mp" class="mp-bar"></div></div>
                 <div style="font-size: 12px; margin-top: 3px;">HP: <span id="p-hp-text"></span> | MP: <span id="p-mp-text"></span></div>
             </div>
             <div class="char-box">
                 <div id="enemy-icon" class="pixel-art">👹</div>
-                <div id="enemy-name">敵の名前</div>
+                <div id="enemy-name">敵</div>
                 <div class="hp-bar-container"><div id="e-hp" class="hp-bar"></div></div>
                 <div style="font-size: 12px; margin-top: 3px;">HP: <span id="e-hp-text"></span></div>
             </div>
@@ -192,30 +211,51 @@
     </div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
 <script>
-    // プレイヤーの永続データ
-    let player = {
-        level: 1,
-        exp: 0,
-        nextExp: 20,
-        stats: { 生命力: 10, 精神力: 10, 筋力: 10, 技量: 10, 信仰: 10 },
-        baseStats: { 生命力: 10, 精神力: 10, 筋力: 10, 技量: 10, 信仰: 10 }, // 割り振り前のベース
-        weapon: '大剣',
-        hp: 100, maxHp: 100,
-        mp: 20, maxMp: 20,
-        potions: 3
+    // ==========================================
+    // 🔥 【対人戦用】Firebaseの設定エリア
+    // ==========================================
+    // Firebaseと接続する時は、ここに自分のプロジェクトの設定を貼り付けるよ！
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_AUTH_DOMAIN",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_STORAGE_BUCKET",
+        messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+        appId: "YOUR_APP_ID"
     };
 
-    // 敵のステージデータ
+    // Firebaseの初期化（設定が書き換えられたら有効化する）
+    let db = null;
+    if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
+        firebase.initializeApp(firebaseConfig);
+        db = firebase.firestore();
+        console.log("Firebaseとの接続に成功したよ！");
+    }
+
+    // プレイヤーデータ
+    let player = {
+        level: 1, exp: 0, nextExp: 20, title: "新米の旅人",
+        stats: { 生命力: 10, 精神力: 10, 筋力: 10, 技量: 10, 信仰: 10 },
+        baseStats: { 生命力: 10, 精神力: 10, 筋力: 10, 技量: 10, 信仰: 10 },
+        weapon: '大剣', hp: 100, maxHp: 100, mp: 20, maxMp: 20, potions: 3
+    };
+
+    // 敵データ（ラスボス：ゴドリック追加！）
     const stages = [
         { name: "忌み子マルギト", icon: "👹", hp: 150, maxHp: 150, atk: 12, expReward: 25, clear: false },
-        { name: "満月の女王レナラ", icon: "🔮", hp: 380, maxHp: 380, atk: 22, expReward: 100, clear: false }
+        { name: "満月の女王レナラ", icon: "🔮", hp: 350, maxHp: 350, atk: 22, expReward: 80, clear: false },
+        { name: "黄金の君主・ゴドリック", icon: "👑", hp: 650, maxHp: 650, atk: 35, expReward: 500, clear: false }
     ];
     
     let currentStageIndex = 0;
     let currentEnemy = {};
     let availablePoints = 5;
     const statNames = ['生命力', '精神力', '筋力', '技量', '信仰'];
+    let playerId = "player_" + Math.floor(Math.random() * 10000); // 簡易プレイヤーID
 
     function initBuildScreen() {
         const container = document.getElementById('status-builders');
@@ -236,13 +276,10 @@
     }
 
     function adjustStat(stat, amount) {
-        // baseStats（レベルアップで固定された値）より下には下げられない
         if (amount > 0 && availablePoints > 0) {
-            player.stats[stat]++;
-            availablePoints--;
+            player.stats[stat]++; availablePoints--;
         } else if (amount < 0 && player.stats[stat] > player.baseStats[stat]) {
-            player.stats[stat]--;
-            availablePoints++;
+            player.stats[stat]--; availablePoints++;
         }
         updateBuildUI();
     }
@@ -250,11 +287,10 @@
     function selectWeapon(wep) {
         player.weapon = wep;
         document.getElementById('selected-wep').innerText = wep;
-        document.getElementById('header-wep').innerText = wep;
         const skillBtn = document.getElementById('skill-btn');
-        if(wep === '大剣') skillBtn.innerText = "巨剣の一撃 (筋力依存)";
-        if(wep === '名刀') skillBtn.innerText = "居合・抜刀 (技量依存)";
-        if(wep === '聖杖') skillBtn.innerText = "黄金の怒り (信仰依存)";
+        if(wep === '大剣') skillBtn.innerText = "巨剣の一撃 (筋力)";
+        if(wep === '名刀') skillBtn.innerText = "居合・抜刀 (技量)";
+        if(wep === '聖杖') skillBtn.innerText = "黄金の怒り (信仰)";
     }
 
     function updateBuildUI() {
@@ -263,32 +299,60 @@
             document.getElementById(`val-${stat}`).innerText = player.stats[stat];
         });
         
-        // ステージ解放判定
-        if (stages[0].clear) {
-            document.getElementById('btn-stage1').removeAttribute('disabled');
+        // ステージクリアによる次のボスの解放判定
+        if (stages[0].clear) document.getElementById('btn-stage1').removeAttribute('disabled');
+        if (stages[1].clear) document.getElementById('btn-stage2').removeAttribute('disabled');
+        
+        // ラスボス撃破で対人戦ボタンを解放！
+        if (stages[2].clear) {
+            document.getElementById('btn-pvp').removeAttribute('disabled');
+            player.title = "エルデの王";
         }
+        updateHeaderUI();
     }
 
     function updateHeaderUI() {
+        document.getElementById('header-title').innerText = player.title;
         document.getElementById('header-lv').innerText = player.level;
         document.getElementById('header-exp').innerText = player.exp;
         document.getElementById('header-next').innerText = player.nextExp;
     }
 
-    // バトル開始
+    // セーブ機能（Firebase連動用の関数）
+    function savePlayerData() {
+        if (!db) {
+            document.getElementById('save-msg').innerText = "（ローカル仮保存：Firebase未接続）";
+            setTimeout(() => document.getElementById('save-msg').innerText = "", 2000);
+            return;
+        }
+        
+        // Firebase(Firestore)にデータを保存
+        db.collection("players").doc(playerId).set({
+            level: player.level,
+            exp: player.exp,
+            nextExp: player.nextExp,
+            title: player.title,
+            stats: player.stats,
+            weapon: player.weapon,
+            stagesClear: [stages[0].clear, stages[1].clear, stages[2].clear]
+        })
+        .then(() => {
+            document.getElementById('save-msg').innerText = "クラウド保存完了！";
+            setTimeout(() => document.getElementById('save-msg').innerText = "", 2000);
+        })
+        .catch((error) => {
+            console.error("セーブエラー: ", error);
+        });
+    }
+
     function startBattle(stageIdx) {
         currentStageIndex = stageIdx;
-        // 敵データをコピーして初期化
         currentEnemy = { ...stages[stageIdx] };
 
-        // プレイヤーのステータス確定、HP/MP計算
-        player.maxHp = player.stats['生命力'] * 12;
-        player.hp = player.maxHp;
-        player.maxMp = player.stats['精神力'] * 3;
-        player.mp = player.maxMp;
+        player.maxHp = player.stats['生命力'] * 12; player.hp = player.maxHp;
+        player.maxMp = player.stats['精神力'] * 3; player.mp = player.maxMp;
         player.potions = 3;
 
-        // 敵のUI反映
         document.getElementById('enemy-title').innerText = `宿敵：${currentEnemy.name}`;
         document.getElementById('enemy-name').innerText = currentEnemy.name;
         document.getElementById('enemy-icon').innerText = currentEnemy.icon;
@@ -298,7 +362,7 @@
         document.getElementById('back-btn').innerText = "逃げ出す";
         
         const log = document.getElementById('log');
-        log.innerHTML = `<p style="color: #ffd700;">${currentEnemy.name}が立ちはだかる！</p>`;
+        log.innerHTML = `<p style="color: #ffd700;">${currentEnemy.name}との決戦！</p>`;
         updateBattleUI();
     }
 
@@ -329,51 +393,27 @@
             addLog(`⚔️ あなたの攻撃！ ${currentEnemy.name}に ${dmg} のダメージ！`);
         } 
         else if (type === 'skill') {
-            if (player.mp < 10) {
-                addLog(`❌ MPが足りない！`, '#ff4757');
-                return;
-            }
+            if (player.mp < 10) { addLog(`❌ MP不足！`, '#ff4757'); return; }
             player.mp -= 10;
             
-            if (player.weapon === '大剣') {
-                dmg = Math.floor(player.stats['筋力'] * 2.2);
-                addLog(`💥 戦技【巨剣の一撃】！ ${currentEnemy.name}に ${dmg} の大ダメージ！`, '#ffa500');
-            } else if (player.weapon === '名刀') {
-                dmg = Math.floor(player.stats['技量'] * 2.0);
-                if(Math.random() > 0.5) {
-                    dmg = Math.floor(dmg * 1.5);
-                    addLog(`✨ クリティカル！ 戦技【居合・抜刀】！ ${currentEnemy.name}に ${dmg} のダメージ！`, '#eccc68');
-                } else {
-                    addLog(`🗡️ 戦技【居合・抜刀】！ ${currentEnemy.name}に ${dmg} のダメージ！`, '#ffd700');
-                }
-            } else if (player.weapon === '聖杖') {
-                dmg = Math.floor(player.stats['信仰'] * 2.5);
-                addLog(`⚡ 戦技【黄金の怒り】！ ${currentEnemy.name}に ${dmg} の光ダメージ！`, '#ffff00');
-            }
+            if (player.weapon === '大剣') dmg = Math.floor(player.stats['筋力'] * 2.5);
+            else if (player.weapon === '名刀') dmg = Math.floor(player.stats['技量'] * 2.2 * (Math.random() > 0.5 ? 1.5 : 1));
+            else if (player.weapon === '聖杖') dmg = Math.floor(player.stats['信仰'] * 2.8);
+            
             currentEnemy.hp = Math.max(0, currentEnemy.hp - dmg);
+            addLog(`💥 戦技を発動！ ${currentEnemy.name}に ${dmg} の大ダメージ！`, '#ffd700');
         } 
         else if (type === 'heal') {
-            if (player.potions <= 0) {
-                addLog(`❌ 聖杯瓶が空っぽだ！`, '#ff4757');
-                return;
-            }
-            if (player.hp === player.maxHp) {
-                addLog(`⚠️ 体力は満タンだ。`);
-                return;
-            }
+            if (player.potions <= 0) { addLog(`❌ 聖杯瓶が空だ！`, '#ff4757'); return; }
             player.potions--;
             let healAmount = Math.floor(player.maxHp * 0.5 + player.stats['信仰'] * 0.5);
             player.hp = Math.min(player.maxHp, player.hp + healAmount);
-            addLog(`🧪 琥珀色の聖杯瓶を使った。 HPが ${healAmount} 回復。`, '#2ed573');
+            addLog(`🧪 聖杯瓶を使用。 HPが ${healAmount} 回復。`, '#2ed573');
         }
 
         updateBattleUI();
 
-        if (currentEnemy.hp <= 0) {
-            winBattle();
-            return;
-        }
-
+        if (currentEnemy.hp <= 0) { winBattle(); return; }
         setTimeout(enemyTurn, 800);
     }
 
@@ -381,9 +421,13 @@
         if (player.hp <= 0) return;
 
         let dmg = currentEnemy.atk;
-        if (Math.random() > 0.7) {
-            dmg = Math.floor(currentEnemy.atk * 1.5);
-            addLog(`💥 ${currentEnemy.name}の強攻撃！ あなたは ${dmg} のダメージ！`, '#ff4757');
+        // ラスボス専用の超強力な行動パターン
+        if (currentEnemy.name === "黄金の君主・ゴドリック" && Math.random() > 0.6) {
+            dmg = Math.floor(currentEnemy.atk * 1.8);
+            addLog(`🔥 ゴドリックの竜頭が火を吹く！ 【接木の炎】！！ あなたは ${dmg} の超ダメージ！`, '#ff4757');
+        } else if (Math.random() > 0.8) {
+            dmg = Math.floor(currentEnemy.atk * 1.4);
+            addLog(`💥 強烈な一撃！ あなたは ${dmg} のダメージ！`, '#ff4757');
         } else {
             addLog(`👹 ${currentEnemy.name}の攻撃。 あなたは ${dmg} のダメージ。`);
         }
@@ -397,32 +441,22 @@
         }
     }
 
-    // 勝利時の処理（経験値獲得・レベルアップ）
     function winBattle() {
-        addLog(`🎉 ${currentEnemy.name}を倒した！`, '#ffd700');
-        addLog(`✨ 経験値を ${currentEnemy.expReward} 獲得した。`, '#2ed573');
+        addLog(`🎉 ${currentEnemy.name}を討伐した！`, '#ffd700');
+        addLog(`✨ 経験値を ${currentEnemy.expReward} 獲得！`, '#2ed573');
         
-        stages[currentStageIndex].clear = true; // ステージクリア記録
+        stages[currentStageIndex].clear = true;
         player.exp += currentEnemy.expReward;
 
-        // レベルアップ判定（ループで複数レベルアップにも対応）
-        let leveledUp = false;
         while (player.exp >= player.nextExp) {
             player.exp -= player.nextExp;
             player.level++;
-            availablePoints += 5; // 1レベルごとに5ポイント付与！
-            player.nextExp = Math.floor(player.nextExp * 1.5); // 次の必要経験値を増加
-            leveledUp = true;
+            availablePoints += 5;
+            player.nextExp = Math.floor(player.nextExp * 1.6);
         }
 
-        if (leveledUp) {
-            addLog(`🌟 レベルアップ！ Lv.${player.level} になった！ 割り振りポイントが5増えた！`, '#ffff00');
-        }
-
-        // 現在のステータスをベースとして固定（これより下にはリセットできなくする）
         player.baseStats = { ...player.stats };
-
-        updateHeaderUI();
+        updateBuildUI();
         document.getElementById('back-btn').innerText = "拠点に戻る";
     }
 
@@ -430,6 +464,10 @@
         document.getElementById('battle-screen').classList.remove('active');
         document.getElementById('build-screen').classList.add('active');
         initBuildScreen();
+    }
+
+    function startPvPPre() {
+        alert("称号『" + player.title + "』の創一よ、よくぞゴドリックを倒した！\n\n次は本物のプレイヤーと戦う「Firebaseリアルタイム対人戦システム」をこのゲームに組み込むぞ。心の準備はいいか！");
     }
 
     initBuildScreen();
