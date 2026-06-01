@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Twilight Throne - 黄昏の王座 -</title>
+    <style>
+        /* レトロなドット絵・ファミコン風のスタイル */
+        @import url('https://fonts.googleapis.com/css2?family=DotGothic16&display=swap');
+        
+        body {
+            background-color: #111;
+            color: #fff;
+            font-family: 'DotGothic16', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            image-rendering: pixelated;
+        }
+
+        #game-container {
+            width: 600px;
+            background-color: #000;
+            border: 4px solid #fff;
+            padding: 20px;
+            box-shadow: 0 0 15px rgba(255,255,255,0.1);
+        }
+
+        h1, h2 {
+            text-align: center;
+            color: #ffd700;
+            margin-top: 0;
+            text-shadow: 2px 2px #000;
+        }
+
+        .screen { display: none; }
+        .active { display: block; }
+
+        /* ステータス画面のスタイル */
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 10px 0;
+            padding: 5px;
+            border-bottom: 1px dashed #333;
+        }
+
+        button {
+            background-color: #222;
+            color: #fff;
+            border: 2px solid #fff;
+            font-family: 'DotGothic16', sans-serif;
+            padding: 5px 15px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #ffd700;
+            color: #000;
+        }
+
+        button:disabled {
+            border-color: #555;
+            color: #555;
+            cursor: not-allowed;
+            background-color: #111;
+        }
+
+        /* バトル画面のスタイル */
+        .battle-view {
+            display: flex;
+            justify-content: space-between;
+            height: 150px;
+            border: 2px solid #333;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: linear-gradient(to bottom, #111, #222);
+        }
+
+        .char-box {
+            width: 45%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .hp-bar-container {
+            width: 100%;
+            background-color: #555;
+            border: 1px solid #fff;
+            height: 12px;
+            margin-top: 5px;
+        }
+
+        .hp-bar {
+            background-color: #ff4757;
+            height: 100%;
+            width: 100%;
+            transition: width 0.3s;
+        }
+
+        .mp-bar {
+            background-color: #1e90ff;
+            height: 100%;
+            width: 100%;
+            transition: width 0.3s;
+        }
+
+        .battle-log {
+            height: 100px;
+            border: 2px solid #fff;
+            padding: 10px;
+            overflow-y: auto;
+            background-color: #111;
+            margin-bottom: 15px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .commands {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .weapon-select {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .pixel-art {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <h1>TWILIGHT THRONE</h1>
+    
+    <div id="build-screen" class="screen active">
+        <h2>キャラクタービルド (残りP: <span id="points">5</span>)</h2>
+        <div class="weapon-select">
+            <button onclick="selectWeapon('大剣')">⚔️大剣 (筋力型)</button>
+            <button onclick="selectWeapon('名刀')">🗡️名刀 (技量型)</button>
+            <button onclick="selectWeapon('聖杖')">🪄聖杖 (信仰型)</button>
+        </div>
+        <p style="text-align: center; color: #aaa;">現在選択中: <strong id="selected-wep" style="color:#fff;">大剣</strong></p>
+        
+        <div id="status-builders">
+            </div>
+        
+        <div style="text-align: center; margin-top: 20px;">
+            <button id="start-battle-btn" onclick="startBattle()" style="padding: 10px 30px; font-size: 20px; color:#ffd700;">ボス戦へ進む ➔</button>
+        </div>
+    </div>
+
+    <div id="battle-screen" class="screen">
+        <h2>宿敵「忌み子・マルギト」</h2>
+        
+        <div class="battle-view">
+            <div class="char-box">
+                <div class="pixel-art">🧙‍♂️</div>
+                <div>プレイヤー (Lv.1)</div>
+                <div class="hp-bar-container"><div id="p-hp" class="hp-bar"></div></div>
+                <div class="hp-bar-container" style="margin-top:2px;"><div id="p-mp" class="mp-bar"></div></div>
+                <div style="font-size: 12px; margin-top: 3px;">HP: <span id="p-hp-text"></span> | MP: <span id="p-mp-text"></span></div>
+            </div>
+            <div class="char-box">
+                <div class="pixel-art">👹</div>
+                <div>マルギト</div>
+                <div class="hp-bar-container"><div id="e-hp" class="hp-bar"></div></div>
+                <div style="font-size: 12px; margin-top: 3px;">HP: <span id="e-hp-text"></span></div>
+            </div>
+        </div>
+
+        <div id="log" class="battle-log"></div>
+
+        <div class="commands">
+            <button onclick="playerAction('attack')">通常攻撃</button>
+            <button id="skill-btn" onclick="playerAction('skill')">固有戦技 (MP 10)</button>
+            <button id="heal-btn" onclick="playerAction('heal')">聖杯瓶 (残3)</button>
+            <button onclick="resetGame()">逃げ出す (ビルドに戻る)</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ゲームデータと状態
+    let player = {
+        stats: { 生命力: 10, 精神力: 10, 筋力: 10, 技量: 10, 信仰: 10 },
+        weapon: '大剣',
+        hp: 100, maxHp: 100,
+        mp: 20, maxMp: 20,
+        potions: 3
+    };
+    
+    let enemy = { name: "マルギト", hp: 250, maxHp: 250, atk: 15 };
+    let availablePoints = 5;
+    const statNames = ['生命力', '精神力', '筋力', '技量', '信仰'];
+
+    // 画面初期化
+    function initBuildScreen() {
+        const container = document.getElementById('status-builders');
+        container.innerHTML = '';
+        statNames.forEach(stat => {
+            container.innerHTML += `
+                <div class="status-row">
+                    <span>${stat}: <strong id="val-${stat}">${player.stats[stat]}</strong></span>
+                    <div>
+                        <button onclick="adjustStat('${stat}', -1)">-</button>
+                        <button onclick="adjustStat('${stat}', 1)">+</button>
+                    </div>
+                </div>
+            `;
+        });
+        updateBuildUI();
+    }
+
+    function adjustStat(stat, amount) {
+        if (amount > 0 && availablePoints > 0) {
+            player.stats[stat]++;
+            availablePoints--;
+        } else if (amount < 0 && player.stats[stat] > 10) {
+            player.stats[stat]--;
+            availablePoints++;
+        }
+        updateBuildUI();
+    }
+
+    function selectWeapon(wep) {
+        player.weapon = wep;
+        document.getElementById('selected-wep').innerText = wep;
+        const skillBtn = document.getElementById('skill-btn');
+        if(wep === '大剣') skillBtn.innerText = "巨剣の一撃 (筋力依存)";
+        if(wep === '名刀') skillBtn.innerText = "居合・抜刀 (技量依存)";
+        if(wep === '聖杖') skillBtn.innerText = "黄金の怒り (信仰依存)";
+    }
+
+    function updateBuildUI() {
+        document.getElementById('points').innerText = availablePoints;
+        statNames.forEach(stat => {
+            document.getElementById(`val-${stat}`).innerText = player.stats[stat];
+        });
+        // 武器の初期化テキスト合わせ
+        selectWeapon(player.weapon);
+    }
+
+    // バトル開始
+    function startBattle() {
+        // ステータスを実数値に反映 (エルデン風スケーリング)
+        player.maxHp = player.stats['生命力'] * 12;
+        player.hp = player.maxHp;
+        player.maxMp = player.stats['精神力'] * 3;
+        player.mp = player.maxMp;
+        player.potions = 3;
+
+        enemy.hp = enemy.maxHp;
+
+        document.getElementById('build-screen').classList.remove('active');
+        document.getElementById('battle-screen').classList.add('active');
+        
+        const log = document.getElementById('log');
+        log.innerHTML = `<p style="color: #ffd700;">忌み子マルギトが現れた！ 激闘が始まる！</p>`;
+        updateBattleUI();
+    }
+
+    function updateBattleUI() {
+        document.getElementById('p-hp').style.width = (player.hp / player.maxHp * 100) + '%';
+        document.getElementById('p-mp').style.width = (player.mp / player.maxMp * 100) + '%';
+        document.getElementById('e-hp').style.width = (enemy.hp / enemy.maxHp * 100) + '%';
+        
+        document.getElementById('p-hp-text').innerText = `${player.hp}/${player.maxHp}`;
+        document.getElementById('p-mp-text').innerText = `${player.mp}/${player.maxMp}`;
+        document.getElementById('e-hp-text').innerText = `${enemy.hp}/${enemy.maxHp}`;
+        document.getElementById('heal-btn').innerText = `聖杯瓶 (残${player.potions})`;
+    }
+
+    // バトルロジック
+    function addLog(text, color = '#fff') {
+        const log = document.getElementById('log');
+        log.innerHTML += `<p style="color: ${color};">${text}</p>`;
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function playerAction(type) {
+        if (player.hp <= 0 || enemy.hp <= 0) return;
+
+        let dmg = 0;
+        if (type === 'attack') {
+            // 通常攻撃は筋力か技量の高い方をちょっと参照
+            dmg = Math.floor(5 + Math.max(player.stats['筋力'], player.stats['技量']) * 0.5);
+            enemy.hp = Math.max(0, enemy.hp - dmg);
+            addLog(`⚔️ あなたの攻撃！ マルギトに ${dmg} のダメージ！`);
+        } 
+        else if (type === 'skill') {
+            if (player.mp < 10) {
+                addLog(`❌ MPが足りない！`, '#ff4757');
+                return;
+            }
+            player.mp -= 10;
+            
+            // 武器ごとのステータス補正（ビルドの個性が出る部分！）
+            if (player.weapon === '大剣') {
+                dmg = Math.floor(player.stats['筋力'] * 2.2);
+                addLog(`💥 戦技【巨剣の一撃】！ マルギトに ${dmg} の大ダメージ！`, '#ffa500');
+            } else if (player.weapon === '名刀') {
+                dmg = Math.floor(player.stats['技量'] * 2.0);
+                // 技量型は確率でクリティカル
+                if(Math.random() > 0.5) {
+                    dmg = Math.floor(dmg * 1.5);
+                    addLog(`✨ クリティカル！ 戦技【居合・抜刀】！ マルギトに ${dmg} のダメージ！`, '#eccc68');
+                } else {
+                    addLog(`🗡️ 戦技【居合・抜刀】！ マルギトに ${dmg} のダメージ！`, '#ffd700');
+                }
+            } else if (player.weapon === '聖杖') {
+                dmg = Math.floor(player.stats['信仰'] * 2.5);
+                addLog(`⚡ 戦技【黄金の怒り】！ マルギトに ${dmg} の光ダメージ！`, '#ffff00');
+            }
+            enemy.hp = Math.max(0, enemy.hp - dmg);
+        } 
+        else if (type === 'heal') {
+            if (player.potions <= 0) {
+                addLog(`❌ 聖杯瓶が空っぽだ！`, '#ff4757');
+                return;
+            }
+            if (player.hp === player.maxHp) {
+                addLog(`⚠️ 体力は満タンだ。`);
+                return;
+            }
+            player.potions--;
+            let healAmount = Math.floor(player.maxHp * 0.5 + player.stats['信仰'] * 0.5);
+            player.hp = Math.min(player.maxHp, player.hp + healAmount);
+            addLog(`🧪 琥珀色の聖杯瓶を使った。 HPが ${healAmount} 回復。`, '#2ed573');
+        }
+
+        updateBattleUI();
+
+        // 勝敗判定
+        if (enemy.hp <= 0) {
+            addLog(`🎉 マルギトを討伐した！ 「大ルーン」を手に入れた！`, '#ffd700');
+            return;
+        }
+
+        // 敵のターン
+        setTimeout(enemyTurn, 800);
+    }
+
+    function enemyTurn() {
+        if (player.hp <= 0) return;
+
+        // マルギトの行動（ランダムで強攻撃）
+        let dmg = enemy.atk;
+        if (Math.random() > 0.7) {
+            dmg = Math.floor(enemy.atk * 1.5);
+            addLog(` 👹 マルギトの猛攻！ 【大槌の叩きつけ】！ あなたは ${dmg} のダメージ！`, '#ff4757');
+        } else {
+            addLog(`👹 マルギトの攻撃。 あなたは ${dmg} のダメージ。`);
+        }
+
+        player.hp = Math.max(0, player.hp - dmg);
+        updateBattleUI();
+
+        if (player.hp <= 0) {
+            addLog(`💀 YOU DIED (あなたは敗北した)`, '#ff4757');
+        }
+    }
+
+    function resetGame() {
+        document.getElementById('battle-screen').classList.remove('active');
+        document.getElementById('build-screen').classList.add('active');
+    }
+
+    // 初回起動
+    initBuildScreen();
+</script>
+
+</body>
+</html>
